@@ -115,7 +115,9 @@ class RainyunAPI:
             server_id: 服务器 ID
 
         Returns:
-            服务器详情字典，包含 Name, ExpiredAt 等字段
+            服务器详情字典，包含：
+            - Data: 服务器基础信息（ExpDate, Status, CPU, Memory 等）
+            - RenewPointPrice: 续费价格 {"7": 2258, "31": 10000}
         """
         return self._request("GET", f"/product/rgs/{server_id}/")
 
