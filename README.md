@@ -1,4 +1,4 @@
-# 雨云自动签到 (Docker 版) v2.6
+# 雨云自动签到 (Docker 版) v2.7
 
 雨云每日自动签到工具，支持 ARM / AMD64 平台，Docker 一键部署。
 
@@ -82,10 +82,65 @@ docker-compose up --build
 
 ## 定时任务
 
+### 方式一：宿主机 crontab（推荐）
+
 ```bash
 # 每天早上 8 点执行
-0 8 * * * docker compose -f /path/to/docker-compose.yml run --rm rainyun-qiandao
+0 8 * * * docker compose -f /path/to/docker-compose.yml up
 ```
+
+### 方式二：容器内定时模式
+
+使用 [supercronic](https://github.com/aptible/supercronic) 实现容器内定时调度，无需配置宿主机 crontab。
+
+```bash
+# 启动定时模式（容器持续运行，按计划自动执行）
+docker compose -f docker-compose.yml -f docker-compose.cron.yml up -d --build
+
+# 查看日志
+docker compose logs -f
+
+# 停止
+docker compose down
+```
+
+**定时模式环境变量：**
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| CRON_MODE | false | 定时模式开关（使用 override 文件时自动启用） |
+| CRON_SCHEDULE | "0 8 * * *" | 执行计划（cron 表达式） |
+
+**cron 表达式示例：**
+
+| 表达式 | 说明 |
+|--------|------|
+| `0 8 * * *` | 每天 8:00 |
+| `0 8,20 * * *` | 每天 8:00 和 20:00 |
+| `0 */6 * * *` | 每 6 小时 |
+| `30 7 * * *` | 每天 7:30 |
+
+### 从旧版本升级
+
+如果你之前使用宿主机 crontab 定时执行，想切换到容器内定时模式：
+
+```bash
+# 1. 拉取最新代码
+git pull
+
+# 2. 在 .env 中设置定时计划（可选，默认每天 8:00）
+# 注意：CRON_MODE 不需要手动设置，override 文件会自动启用
+CRON_SCHEDULE="0 8 * * *"
+
+# 3. 重新构建并启动定时模式
+docker compose -f docker-compose.yml -f docker-compose.cron.yml up -d --build
+
+# 4. 删除宿主机 crontab 中的相关条目（可选）
+crontab -l | grep -v "rainyun" | crontab -
+# 或手动编辑: crontab -e，找到并删除 rainyun 相关行
+```
+
+> ⚠️ 新版本新增了 `entrypoint.sh` 和 `docker-compose.cron.yml` 文件，升级后需要重新构建镜像。
 
 ## 致谢
 

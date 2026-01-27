@@ -31,6 +31,17 @@ RUN apt-get update && apt-get install -y \
     libasound2t64 \
     && rm -rf /var/lib/apt/lists/*
 
+# 安装 supercronic（容器定时任务调度器）
+# 使用 dpkg --print-architecture 动态检测架构，兼容所有构建方式
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    ARCH="$(dpkg --print-architecture)" && \
+    echo "检测到架构: ${ARCH}" && \
+    curl -fsSL "https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-${ARCH}" \
+         -o /usr/local/bin/supercronic && \
+    chmod +x /usr/local/bin/supercronic && \
+    apt-get purge -y curl && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # 复制依赖文件并安装
@@ -46,6 +57,9 @@ COPY notify.py .
 COPY stealth.min.js .
 COPY api_client.py .
 COPY server_manager.py .
+COPY entrypoint.sh .
+# 转换 Windows 换行符为 Unix 格式，并设置执行权限
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # 设置环境变量默认值
 ENV RAINYUN_USER=""
@@ -62,9 +76,12 @@ ENV RENEW_THRESHOLD_DAYS=7
 ENV RENEW_PRODUCT_IDS=""
 # 推送服务（示例）
 ENV PUSH_KEY=""
+# 定时模式配置
+ENV CRON_MODE=false
+ENV CRON_SCHEDULE="0 8 * * *"
 # Chromium 路径（Debian 系统）
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
-# 使用 -u 参数禁用 Python 输出缓冲，确保日志实时输出
-CMD ["python", "-u", "rainyun.py"]
+# 启动脚本（支持单次运行和定时模式）
+CMD ["/app/entrypoint.sh"]

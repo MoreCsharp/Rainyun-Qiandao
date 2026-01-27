@@ -4,6 +4,7 @@ services:
   rainyun-qiandao:
     build: .
     container_name: rainyun-qiandao
+    init: true  # 让 tini 作为 PID1，定时模式必需
     env_file:
       - .env
     environment:
@@ -20,6 +21,9 @@ services:
       - RENEW_PRODUCT_IDS=${RENEW_PRODUCT_IDS:-}         # 续费白名单
       # 推送服务 (示例)
       - PUSH_KEY=${PUSH_KEY:-}                           # Server酱推送密钥
+      # 定时模式 (可选，默认关闭)
+      - CRON_MODE=${CRON_MODE:-false}                    # 定时模式开关
+      - "CRON_SCHEDULE=${CRON_SCHEDULE:-0 8 * * *}"       # 执行计划(cron表达式)
     volumes:
       - ./temp:/app/temp                    # 临时文件目录
       - ./cookies.json:/app/cookies.json    # 持久化 cookies
