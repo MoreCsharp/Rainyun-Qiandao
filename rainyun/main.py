@@ -387,7 +387,7 @@ def process_captcha(ctx: RuntimeContext, retry_count: int = 0):
                 bboxes = detect_captcha_bboxes(ctx, captcha_bytes, captcha_image)
                 if not bboxes:
                     logger.error("验证码检测失败，正在重试")
-                    save_captcha_samples(captcha_image, sprites, reason="no_bboxes")
+                    save_captcha_samples(captcha_image, sprites, config=ctx.config, reason="no_bboxes")
                 else:
                     result = solver.solve(captcha_image, sprites, bboxes)
                     if result:
@@ -420,13 +420,13 @@ def process_captcha(ctx: RuntimeContext, retry_count: int = 0):
                                 logger.info("验证码通过")
                                 return True
                             logger.error("验证码未通过，正在重试")
-                            save_captcha_samples(captcha_image, sprites, reason="submit_failed")
+                            save_captcha_samples(captcha_image, sprites, config=ctx.config, reason="submit_failed")
                         else:
                             logger.error("验证码识别结果无效，正在重试")
-                            save_captcha_samples(captcha_image, sprites, reason="answer_invalid")
+                            save_captcha_samples(captcha_image, sprites, config=ctx.config, reason="answer_invalid")
                     else:
                         logger.error("验证码匹配失败，正在重试")
-                        save_captcha_samples(captcha_image, sprites, reason="match_failed")
+                        save_captcha_samples(captcha_image, sprites, config=ctx.config, reason="match_failed")
             else:
                 logger.error("当前验证码识别率低，尝试刷新")
 
@@ -461,9 +461,12 @@ def save_captcha_samples(
     captcha_image: np.ndarray | None,
     sprites: list[np.ndarray],
     *,
+    config: Config,
     reason: str,
 ) -> None:
     """保存验证码样本用于排查。"""
+    if not config.captcha_save_samples:
+        return
     try:
         base_dir = os.path.join("temp", "captcha_samples")
         os.makedirs(base_dir, exist_ok=True)
@@ -485,7 +488,7 @@ def save_captcha_samples(
 def check_captcha(ctx: RuntimeContext, captcha_image: np.ndarray, sprites: list[np.ndarray]) -> bool:
     if len(sprites) != 3:
         logger.error(f"验证码小图数量异常，期望 3，实际 {len(sprites)}")
-        save_captcha_samples(captcha_image, sprites, reason="sprite_count")
+        save_captcha_samples(captcha_image, sprites, config=ctx.config, reason="sprite_count")
         return False
     low_confidence = 0
     for index, sprite in enumerate(sprites, start=1):
@@ -495,7 +498,7 @@ def check_captcha(ctx: RuntimeContext, captcha_image: np.ndarray, sprites: list[
             logger.warning(f"验证码小图 {index} 识别为低置信度标记")
     if low_confidence >= 2:
         logger.error("低置信度小图过多，跳过本次识别")
-        save_captcha_samples(captcha_image, sprites, reason="low_confidence")
+        save_captcha_samples(captcha_image, sprites, config=ctx.config, reason="low_confidence")
         return False
     return True
 

@@ -177,6 +177,7 @@ class Config:
     points_to_cny_rate: int
     captcha_retry_limit: int
     captcha_retry_unlimited: bool
+    captcha_save_samples: bool
     request_timeout: int
     max_retries: int
     retry_delay: float
@@ -214,6 +215,7 @@ class Config:
         points_to_cny_rate = _read_int(env, "POINTS_TO_CNY_RATE", 2000)
         captcha_retry_limit = _read_int(env, "CAPTCHA_RETRY_LIMIT", 5)
         captcha_retry_unlimited = _read_bool(env, "CAPTCHA_RETRY_UNLIMITED", False)
+        captcha_save_samples = _read_bool(env, "CAPTCHA_SAVE_SAMPLES", False)
 
         request_timeout = _read_int(env, "REQUEST_TIMEOUT", 15)
         max_retries = _read_int(env, "MAX_RETRIES", 3)
@@ -258,6 +260,7 @@ class Config:
             points_to_cny_rate=points_to_cny_rate,
             captcha_retry_limit=captcha_retry_limit,
             captcha_retry_unlimited=captcha_retry_unlimited,
+            captcha_save_samples=captcha_save_samples,
             request_timeout=request_timeout,
             max_retries=max_retries,
             retry_delay=retry_delay,
