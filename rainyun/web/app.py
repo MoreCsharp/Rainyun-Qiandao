@@ -9,7 +9,13 @@ from fastapi.responses import JSONResponse
 
 from rainyun.web.errors import ApiError
 from rainyun.web.responses import error_response
-from rainyun.web.routes import accounts_router, actions_router, servers_router, system_router
+from rainyun.web.routes import (
+    accounts_router,
+    actions_router,
+    auth_router,
+    servers_router,
+    system_router,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +35,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content=error_response("系统异常", code=1))
 
     app.include_router(accounts_router)
+    app.include_router(auth_router)
     app.include_router(servers_router)
     app.include_router(system_router)
     app.include_router(actions_router)
