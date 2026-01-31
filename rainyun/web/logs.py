@@ -85,3 +85,14 @@ def get_logs(limit: int = 200) -> list[str]:
     safe_limit = min(max(limit, 1), _MAX_LOG_LINES)
     with _lock:
         return list(_buffer)[-safe_limit:]
+
+
+def clear_logs() -> None:
+    with _lock:
+        _buffer.clear()
+    try:
+        os.makedirs(os.path.dirname(_LOG_FILE_PATH), exist_ok=True)
+        with open(_LOG_FILE_PATH, "w", encoding="utf-8") as handle:
+            handle.write("")
+    except OSError:
+        return

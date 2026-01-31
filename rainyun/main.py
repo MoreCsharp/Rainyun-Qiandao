@@ -1,13 +1,14 @@
-import io
 import logging
 import os
 import random
 import re
 import shutil
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from itertools import combinations, permutations
+from threading import Lock
 from typing import Protocol, Sequence
 
 import cv2
@@ -32,6 +33,34 @@ class CaptchaRetryableError(Exception):
     """可重试的验证码处理错误（如下载失败、网络问题等）"""
     pass
 
+
+class LazyDdddOcr:
+    """延迟初始化的 ddddocr，只有首次调用才创建实例。"""
+
+    def __init__(self, *, det: bool = False) -> None:
+        self._det = det
+        self._instance: ddddocr.DdddOcr | None = None
+
+    def _ensure(self) -> ddddocr.DdddOcr:
+        if self._instance is None:
+            if self._det:
+                logging.getLogger(__name__).info("初始化 ddddocr(det)")
+                self._instance = ddddocr.DdddOcr(det=True, show_ad=False)
+            else:
+                logging.getLogger(__name__).info("初始化 ddddocr(ocr)")
+                self._instance = ddddocr.DdddOcr(ocr=True, show_ad=False)
+        return self._instance
+
+    def classification(self, image_bytes: bytes):
+        if self._det:
+            raise AttributeError("当前实例为 det 模式，无法调用 classification")
+        return self._ensure().classification(image_bytes)
+
+    def detection(self, image_bytes: bytes):
+        if not self._det:
+            raise AttributeError("当前实例为 ocr 模式，无法调用 detection")
+        return self._ensure().detection(image_bytes)
+
 try:
     from .notify import configure, send
 
@@ -55,18 +84,46 @@ try:
 except Exception as e:
     print(f"⚠️ 服务器管理模块加载失败：{e}")
     _server_manager_error = str(e)
-# 创建一个内存缓冲区，用于存储所有日志
-log_capture_string = io.StringIO()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 # 配置 logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-#输出到字符串 (新增功能)
-string_handler = logging.StreamHandler(log_capture_string)
-string_handler.setFormatter(formatter)
-logger.addHandler(string_handler)
+class _RingLogBuffer:
+    """有上限的日志缓冲，避免内存无限增长。"""
+
+    def __init__(self, max_lines: int = 600) -> None:
+        self._buffer = deque(maxlen=max_lines)
+        self._lock = Lock()
+
+    def append(self, message: str) -> None:
+        with self._lock:
+            self._buffer.append(message)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._buffer.clear()
+
+    def getvalue(self) -> str:
+        with self._lock:
+            return "\n".join(self._buffer)
+
+
+class _RingLogHandler(logging.Handler):
+    def __init__(self, buffer: _RingLogBuffer) -> None:
+        super().__init__()
+        self._buffer = buffer
+
+    def emit(self, record: logging.LogRecord) -> None:
+        message = self.format(record)
+        self._buffer.append(message)
+
+
+log_capture_buffer = _RingLogBuffer(max_lines=600)
+ring_handler = _RingLogHandler(log_capture_buffer)
+ring_handler.setFormatter(formatter)
+logger.addHandler(ring_handler)
 
 
 @dataclass(frozen=True)
@@ -540,8 +597,7 @@ def run_with_config(config: Config) -> bool:
     temp_dir = None
     debug = False
     session = None
-    log_capture_string.seek(0)
-    log_capture_string.truncate(0)
+    log_capture_buffer.clear()
     try:
         configure(config)
         timeout = config.timeout
@@ -578,9 +634,9 @@ def run_with_config(config: Config) -> bool:
         if not debug:
             logger.info(f"随机延时等待 {delay} 分钟 {delay_sec} 秒")
             time.sleep(delay * 60 + delay_sec)
-        logger.info("初始化 ddddocr")
-        ocr = ddddocr.DdddOcr(ocr=True, show_ad=False)
-        det = ddddocr.DdddOcr(det=True, show_ad=False)
+        logger.info("准备 OCR/DET（延迟初始化）")
+        ocr = LazyDdddOcr(det=False)
+        det = LazyDdddOcr(det=True)
         logger.info("初始化 Selenium")
         session = BrowserSession(config=config, debug=debug, linux=linux)
         driver, wait, temp_dir = session.start()
@@ -647,7 +703,7 @@ def run_with_config(config: Config) -> bool:
             logger.info("未配置 RAINYUN_API_KEY，跳过服务器管理功能")
 
         # 3. 获取所有日志内容
-        log_content = log_capture_string.getvalue()
+        log_content = log_capture_buffer.getvalue()
 
         # 4. 发送通知（签到日志 + 服务器状态，一次性推送）
         logger.info("正在发送通知...")

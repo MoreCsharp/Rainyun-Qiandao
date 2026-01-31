@@ -9,8 +9,6 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
-import ddddocr
-
 from rainyun.api.client import RainyunAPI
 from rainyun.browser.cookies import load_cookies
 from rainyun.browser.pages import LoginPage, RewardPage
@@ -18,7 +16,7 @@ from rainyun.browser.session import BrowserSession, RuntimeContext
 from rainyun.config import Config
 from rainyun.data.store import DataStore
 from rainyun.server.manager import ServerManager
-from rainyun.main import process_captcha
+from rainyun.main import LazyDdddOcr, process_captcha
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +81,8 @@ class MultiAccountRunner:
         base_config = self._build_base_config(settings)
         session = BrowserSession(base_config, debug=base_config.debug, linux=base_config.linux_mode)
         driver, wait, temp_dir = session.start()
-        ocr = ddddocr.DdddOcr(ocr=True, show_ad=False)
-        det = ddddocr.DdddOcr(det=True, show_ad=False)
+        ocr = LazyDdddOcr(det=False)
+        det = LazyDdddOcr(det=True)
         return base_config, session, driver, wait, temp_dir, ocr, det
 
     def _close_session(self, session: BrowserSession, temp_dir: str | None, base_config: Config) -> None:

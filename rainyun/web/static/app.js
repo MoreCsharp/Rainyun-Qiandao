@@ -22,6 +22,7 @@ const tabLogs = document.getElementById("tab-logs");
 const logOutput = document.getElementById("log-output");
 const logAutoRefresh = document.getElementById("log-auto-refresh");
 const refreshLogsBtn = document.getElementById("refresh-logs");
+const clearLogsBtn = document.getElementById("clear-logs");
 
 const accountName = document.getElementById("account-name");
 const accountUsername = document.getElementById("account-username");
@@ -940,6 +941,23 @@ async function loadLogs() {
   }
 }
 
+async function clearLogs() {
+  if (!logOutput) return;
+  if (!confirm("确认清空实时日志吗？")) {
+    return;
+  }
+  if (!confirm("清空后无法恢复，确定继续？")) {
+    return;
+  }
+  try {
+    await apiFetch("/api/logs/clear", { method: "POST" });
+    logOutput.textContent = "";
+    showToast("日志已清空");
+  } catch (err) {
+    showToast(err.message || "清空日志失败", "error");
+  }
+}
+
 function startLogPolling() {
   if (logTimer) return;
   logTimer = setInterval(loadLogs, 2000);
@@ -1121,6 +1139,9 @@ tabButtons.forEach((button) => {
 
 if (refreshLogsBtn) {
   refreshLogsBtn.addEventListener("click", loadLogs);
+}
+if (clearLogsBtn) {
+  clearLogsBtn.addEventListener("click", clearLogs);
 }
 if (logAutoRefresh) {
   logAutoRefresh.addEventListener("change", () => {
