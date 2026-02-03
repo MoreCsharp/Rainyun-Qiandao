@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import random
+import time
 import os
 import shutil
 from dataclasses import dataclass, replace
@@ -85,16 +87,34 @@ class MultiAccountRunner:
         det = LazyDdddOcr(det=True)
         return base_config, session, driver, wait, temp_dir, ocr, det
 
+    def _apply_random_delay(self, settings: Any) -> None:
+        debug = getattr(settings, "debug", False)
+        max_delay = getattr(settings, "max_delay", 0)
+        if debug:
+            logger.info("调试模式已开启，跳过随机延时")
+            return
+        if not isinstance(max_delay, int) or max_delay <= 0:
+            return
+        delay_min = random.randint(0, max_delay)
+        delay_sec = random.randint(0, 60)
+        logger.info("随机延时等待 %s 分钟 %s 秒", delay_min, delay_sec)
+        time.sleep(delay_min * 60 + delay_sec)
+
     def _close_session(self, session: BrowserSession, temp_dir: str | None, base_config: Config) -> None:
         session.close()
         if temp_dir and not base_config.debug:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def run(self) -> list[AccountRunResult]:
+    def run(self, delay: bool = False) -> list[AccountRunResult]:
         data = self.store.load() if self.store.data is None else self.store.data
         if not data.accounts:
             logger.info("未配置任何账户，跳过多账户调度")
             return []
+        if not any(getattr(account, "enabled", False) for account in data.accounts):
+            logger.info("没有启用的账户，跳过多账户调度")
+            return []
+        if delay:
+            self._apply_random_delay(data.settings)
 
         base_config, session, driver, wait, temp_dir, ocr, det = self._create_session(data.settings)
 
@@ -118,7 +138,7 @@ class MultiAccountRunner:
             self._close_session(session, temp_dir, base_config)
         return results
 
-    def run_for_account(self, account_id: str) -> AccountRunResult | None:
+    def run_for_account(self, account_id: str, delay: bool = False) -> AccountRunResult | None:
         data = self.store.load() if self.store.data is None else self.store.data
         account = next(
             (item for item in data.accounts if str(getattr(item, "id", "")) == str(account_id)),
@@ -126,6 +146,8 @@ class MultiAccountRunner:
         )
         if not account:
             return None
+        if delay:
+            self._apply_random_delay(data.settings)
         base_config, session, driver, wait, temp_dir, ocr, det = self._create_session(data.settings)
         try:
             return self._run_single_account(
@@ -150,7 +172,9 @@ class MultiAccountRunner:
             if not account.enabled:
                 continue
             account_id = str(getattr(account, "id", "") or "").strip()
-            account_name = str(getattr(account, "name", "") or "").strip() or account_id
+            account_name = str(getattr(account, "name", "") or "").strip()
+            account_username = str(getattr(account, "username", "") or "").strip()
+            account_name = account_name or account_username or account_id
             if not getattr(account, "api_key", ""):
                 results.append(
                     AccountRenewResult(
@@ -186,7 +210,8 @@ class MultiAccountRunner:
                     )
                 )
             except Exception as exc:
-                logger.error("账户 %s 续费检查失败: %s", account_id, exc)
+                user_label = account_name or account_username or account_id or "unknown"
+                logger.error("用户 %s 续费检查失败: %s", user_label, exc)
                 results.append(
                     AccountRenewResult(
                         account_id=account_id,
@@ -211,6 +236,10 @@ class MultiAccountRunner:
         temp_dir: str,
     ) -> AccountRunResult:
         config = Config.from_account(account, settings)
+        account_id = str(getattr(account, "id", "") or "").strip()
+        account_name = str(getattr(account, "name", "") or "").strip()
+        account_username = str(getattr(account, "username", "") or "").strip()
+        user_label = account_name or account_username or account_id or "unknown"
         configure(config)
         api_client = RainyunAPI(config.rainyun_api_key, config=config)
         ctx = RuntimeContext(
@@ -226,7 +255,7 @@ class MultiAccountRunner:
         try:
             driver.delete_all_cookies()
         except Exception as exc:
-            logger.warning("清理 cookies 失败: %s", exc)
+            logger.warning("用户 %s 清理 cookies 失败: %s", user_label, exc)
 
         try:
             start_points = 0
@@ -234,7 +263,7 @@ class MultiAccountRunner:
                 try:
                     start_points = api_client.get_user_points()
                 except Exception as exc:
-                    logger.warning("获取初始积分失败: %s", exc)
+                    logger.warning("用户 %s 获取初始积分失败: %s", user_label, exc)
 
             login_page = LoginPage(ctx, captcha_handler=process_captcha)
             reward_page = RewardPage(ctx, captcha_handler=process_captcha)
@@ -259,7 +288,7 @@ class MultiAccountRunner:
                 earned_points=reward_result.get("earned"),
             )
         except Exception as exc:
-            logger.error("账户 %s 签到失败: %s", getattr(account, "id", "unknown"), exc)
+            logger.error("用户 %s 签到失败: %s", user_label, exc)
             return self._mark_result(account, success=False, message=str(exc), status="failed")
 
     def _mark_result(
@@ -274,12 +303,15 @@ class MultiAccountRunner:
         now = datetime.now().isoformat()
         account.last_checkin = now
         account.last_status = "success" if success else message or "failed"
+        account_id = str(getattr(account, "id", "") or "").strip()
+        account_name = str(getattr(account, "name", "") or "").strip()
+        account_username = str(getattr(account, "username", "") or "").strip()
+        account_name = account_name or account_username or account_id
+        user_label = account_name or account_username or account_id or "unknown"
         try:
             self.store.update_account(account)
         except Exception as exc:
-            logger.error("回写账户状态失败: %s", exc)
-        account_id = str(getattr(account, "id", "") or "").strip()
-        account_name = str(getattr(account, "name", "") or "").strip() or account_id
+            logger.error("用户 %s 回写账户状态失败: %s", user_label, exc)
         return AccountRunResult(
             account_id=account_id,
             account_name=account_name,
