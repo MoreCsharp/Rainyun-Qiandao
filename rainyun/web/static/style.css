@@ -37,6 +37,14 @@
   --accent-red: #EF4444;
   --accent-purple: #8B5CF6;
 
+  /* 状态标签背景/边框透明度 */
+  --status-success-bg: rgba(76, 212, 160, 0.15);
+  --status-success-border: rgba(76, 212, 160, 0.3);
+  --status-warning-bg: rgba(249, 115, 22, 0.15);
+  --status-warning-border: rgba(249, 115, 22, 0.3);
+  --status-error-bg: rgba(239, 68, 68, 0.15);
+  --status-error-border: rgba(239, 68, 68, 0.3);
+
   /* 文字色 */
   --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
@@ -958,6 +966,185 @@ td:last-child {
 /* 设置页脚 */
 .settings-footer {
   margin-top: 8px;
+}
+
+/* ============================================
+   账户卡片布局
+   ============================================ */
+.accounts-section {
+  margin-top: 20px;
+  margin-bottom: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.account-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.account-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color var(--transition-base);
+}
+
+.account-card:hover {
+  border-color: var(--glass-border-hover);
+}
+
+.account-card.disabled {
+  opacity: 0.5;
+}
+
+.account-card.disabled .account-card-actions {
+  pointer-events: none;
+}
+
+.account-card.disabled .account-card-actions .ghost-btn {
+  opacity: 0.6;
+}
+
+.account-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-card-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.account-card-toggles {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.account-card-points {
+  text-align: center;
+  padding: 12px 0;
+}
+
+.account-card-points .points-value {
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px var(--primary-glow);
+}
+
+.account-card-points .points-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.account-card-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.status-tag.success {
+  background: var(--status-success-bg);
+  border-color: var(--status-success-border);
+  color: var(--accent-green);
+}
+
+.status-tag.warning {
+  background: var(--status-warning-bg);
+  border-color: var(--status-warning-border);
+  color: var(--accent-orange);
+}
+
+.status-tag.error {
+  background: var(--status-error-bg);
+  border-color: var(--status-error-border);
+  color: var(--accent-red);
+}
+
+.status-tag.muted {
+  color: var(--text-muted);
+}
+
+.account-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.account-card-actions .ghost-btn {
+  flex: 1;
+  min-width: 60px;
+  padding: 8px 12px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.account-card-actions .ghost-btn.danger {
+  color: var(--accent-red);
+}
+
+.account-card-actions .ghost-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* 账户卡片区域头部 */
+.accounts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.accounts-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.accounts-header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 /* ============================================

@@ -6,7 +6,7 @@ const loginPassword = document.getElementById("login-password");
 const logoutBtn = document.getElementById("logout-btn");
 const toast = document.getElementById("toast");
 
-const accountsBody = document.getElementById("accounts-body");
+const accountsContainer = document.getElementById("accounts-container");
 const refreshAccountsBtn = document.getElementById("refresh-accounts");
 const checkinBtn = document.getElementById("checkin-btn");
 const renewBtn = document.getElementById("renew-btn");
@@ -166,6 +166,30 @@ function showToast(message, type = "success") {
   toast.className = `toast ${type}`;
   toast.classList.remove("hidden");
   setTimeout(() => toast.classList.add("hidden"), 2800);
+}
+
+const HTML_ESCAPE_MAP = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+  "`": "&#96;",
+};
+const STATUS_TAG_VARIANTS = new Set(["success", "warning", "error", "muted"]);
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"'`]/g, (char) => HTML_ESCAPE_MAP[char]);
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/[\u0000-\u001F\u007F]/g, "");
+}
+
+function renderStatusTag(variant, text, title = "") {
+  const safeVariant = STATUS_TAG_VARIANTS.has(variant) ? ` ${variant}` : "";
+  const safeTitle = title ? ` title="${escapeAttr(title)}"` : "";
+  return `<span class="status-tag${safeVariant}"${safeTitle}>${escapeHtml(text)}</span>`;
 }
 
 function maskValue(raw) {
@@ -1433,83 +1457,124 @@ async function handleLogin() {
 async function loadAccounts() {
   const accounts = await apiFetch("/api/accounts");
   accountsCache = Array.isArray(accounts) ? accounts : [];
-  accountsBody.innerHTML = "";
-  const rowMap = new Map();
+  accountsContainer.innerHTML = "";
+  const cardMap = new Map();
   accountsCache.forEach((account) => {
-    const row = document.createElement("tr");
-    const canRenew = !!account.api_key;
+    const card = document.createElement("div");
+    card.className = `account-card${account.enabled ? "" : " disabled"}`;
     const autoRenewEnabled = account.auto_renew !== false;
-    const autoRenewLabel = autoRenewEnabled ? "自动续费：开" : "自动续费：关";
-    row.innerHTML = `
-      <td>${account.name || account.id}</td>
-      <td>${account.enabled ? "是" : "否"}</td>
-      <td>${account.last_status || "-"}</td>
-      <td>${account.last_checkin || "-"}</td>
-      <td data-field="points">-</td>
-      <td data-field="whitelist">-</td>
-      <td data-field="expiry">-</td>
-      <td>
-        <button class="ghost-btn" data-action="checkin" data-id="${account.id}">签到</button>
-        <button class="ghost-btn" data-action="renew" data-id="${account.id}" ${canRenew ? "" : "disabled"}>续费</button>
-        <button class="ghost-btn" data-action="toggle-renew" data-id="${account.id}">${autoRenewLabel}</button>
-        <button class="ghost-btn" data-action="edit" data-id="${account.id}">编辑</button>
-        <button class="ghost-btn" data-action="delete" data-id="${account.id}">删除</button>
-      </td>
+    const canRenew = !!account.api_key;
+    const accountId = String(account.id ?? "");
+    const accountDisplayName = escapeHtml(account.name || account.id || "");
+    const accountIdAttr = escapeAttr(accountId);
+    card.innerHTML = `
+      <div class="account-card-header">
+        <h4>${accountDisplayName}</h4>
+        <div class="account-card-toggles">
+          <div class="toggle">
+            <span>自动续费</span>
+            <label class="switch">
+              <input type="checkbox" data-action="toggle-renew" data-id="${accountIdAttr}" ${autoRenewEnabled ? "checked" : ""} ${canRenew ? "" : "disabled"} />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="toggle">
+            <span>启用</span>
+            <label class="switch">
+              <input type="checkbox" data-action="toggle-enabled" data-id="${accountIdAttr}" ${account.enabled ? "checked" : ""} />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="account-card-points">
+        <div class="points-value" data-field="points">-</div>
+        <div class="points-label">当前积分</div>
+      </div>
+      <div class="account-card-status" data-field="status">
+        <span class="status-tag muted">加载中...</span>
+      </div>
+      <div class="account-card-actions">
+        <button class="ghost-btn" data-action="checkin" data-id="${accountIdAttr}">签到</button>
+        <button class="ghost-btn" data-action="renew" data-id="${accountIdAttr}" ${canRenew ? "" : "disabled"}>续费</button>
+        <button class="ghost-btn" data-action="edit" data-id="${accountIdAttr}">编辑</button>
+        <button class="ghost-btn danger" data-action="delete" data-id="${accountIdAttr}">删除</button>
+      </div>
     `;
-    accountsBody.appendChild(row);
-    rowMap.set(account.id, row);
+    accountsContainer.appendChild(card);
+    cardMap.set(account.id, card);
   });
   await Promise.all(
     accountsCache.map(async (account) => {
-      const row = rowMap.get(account.id);
-      if (!row) return;
-      const pointsCell = row.querySelector("[data-field='points']");
-      const whitelistCell = row.querySelector("[data-field='whitelist']");
-      const expiryCell = row.querySelector("[data-field='expiry']");
+      const card = cardMap.get(account.id);
+      if (!card) return;
+      const pointsEl = card.querySelector("[data-field='points']");
+      const statusEl = card.querySelector("[data-field='status']");
       const whitelistIds = Array.isArray(account.renew_products)
         ? account.renew_products
         : [];
-      if (whitelistCell) {
-        whitelistCell.textContent = whitelistIds.length
-          ? whitelistIds.join(", ")
-          : "全部";
-      }
       if (!account.api_key) {
-        if (pointsCell) {
-          pointsCell.textContent = "无 API Key";
+        if (pointsEl) pointsEl.textContent = "-";
+        if (statusEl) {
+          statusEl.innerHTML = renderStatusTag("muted", "📦 无 API Key");
         }
-        setCellLines(expiryCell, ["无 API Key"], true);
         return;
       }
-      if (pointsCell) {
-        pointsCell.textContent = "加载中";
-      }
-      setCellLines(expiryCell, ["加载中"]);
       try {
         const result = await apiFetch(`/api/servers/summary/${account.id}`);
-        if (pointsCell) {
-          pointsCell.textContent =
-            typeof result.points === "number" ? result.points : "未知";
+        if (pointsEl) {
+          pointsEl.textContent =
+            typeof result.points === "number" ? result.points.toLocaleString() : "-";
         }
         const servers = Array.isArray(result.servers) ? result.servers : [];
         const filtered =
           whitelistIds.length > 0
             ? servers.filter((item) => whitelistIds.includes(Number(item.id)))
             : servers;
+        const statusTags = [];
+        // 签到状态
+        const lastStatus = (account.last_status || "").toLowerCase();
+        const lastCheckin = account.last_checkin || "";
+        const checkinTime = lastCheckin ? new Date(lastCheckin).toLocaleString("zh-CN") : "";
+        const checkinTitle = checkinTime ? `签到时间: ${checkinTime}` : "";
+        if (lastStatus === "success" || lastStatus.includes("已签到") || lastStatus.includes("already")) {
+          statusTags.push(renderStatusTag("success", "✅ 今日已签到", checkinTitle));
+        } else if (lastStatus === "failed" || lastStatus.includes("fail") || lastStatus.includes("失败")) {
+          const failedTitle = checkinTime ? `尝试时间: ${checkinTime}` : "";
+          statusTags.push(renderStatusTag("error", "❌ 签到失败", failedTitle));
+        } else {
+          statusTags.push(renderStatusTag("warning", "⏳ 待签到"));
+        }
+        // 服务器到期状态
         if (filtered.length === 0) {
-          setCellLines(
-            expiryCell,
-            [whitelistIds.length ? "白名单无匹配服务器" : "无服务器"],
-            true
+          statusTags.push(
+            renderStatusTag(
+              "muted",
+              `📦 ${whitelistIds.length ? "无匹配服务器" : "无服务器"}`
+            )
           );
         } else {
-          setCellLines(expiryCell, filtered.map(formatServerLine));
+          // 按到期时间排序，最紧急的在前
+          const sorted = [...filtered].sort((a, b) => (a.days_remaining ?? 999) - (b.days_remaining ?? 999));
+          // 显示每个产品的到期状态
+          sorted.forEach((server) => {
+            const days = server.days_remaining ?? 999;
+            const name = server.name || `服务器${server.id}`;
+            if (days <= 0) {
+              statusTags.push(renderStatusTag("error", `🔴 ${name} 已过期`));
+            } else if (days <= 7) {
+              statusTags.push(renderStatusTag("warning", `⚠️ ${name} ${days}天`));
+            } else {
+              statusTags.push(renderStatusTag("success", `🟢 ${name} ${days}天`));
+            }
+          });
         }
+        if (statusEl) statusEl.innerHTML = statusTags.join("");
       } catch (err) {
-        if (pointsCell) {
-          pointsCell.textContent = "获取失败";
+        if (pointsEl) pointsEl.textContent = "-";
+        if (statusEl) {
+          statusEl.innerHTML = renderStatusTag("error", "❌ 获取失败");
         }
-        setCellLines(expiryCell, ["获取失败"], true);
       }
     })
   );
@@ -1625,7 +1690,14 @@ async function deleteAccount(id) {
   }
 }
 
-async function toggleAccountAutoRenew(id) {
+async function patchAccountField(id, patch) {
+  return apiFetch(`/api/accounts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+async function toggleAccountAutoRenew(id, autoRenew) {
   let account = accountsCache.find((item) => String(item.id) === String(id));
   if (!account) {
     const accounts = await apiFetch("/api/accounts");
@@ -1636,29 +1708,42 @@ async function toggleAccountAutoRenew(id) {
     showToast("账户不存在", "error");
     return;
   }
-  const current = account.auto_renew !== false;
-  const payload = {
-    name: account.name || "",
-    username: account.username || "",
-    password: account.password || "",
-    api_key: account.api_key || "",
-    renew_products: Array.isArray(account.renew_products)
-      ? account.renew_products
-          .map((item) => Number(item))
-          .filter((item) => Number.isFinite(item))
-      : [],
-    enabled: account.enabled !== false,
-    auto_renew: !current,
-  };
+  const previous = account.auto_renew !== false;
+  if (previous === autoRenew) return;
   try {
-    await apiFetch(`/api/accounts/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
-    showToast(`自动续费已${current ? "关闭" : "开启"}`);
+    await patchAccountField(id, { auto_renew: autoRenew });
+    account.auto_renew = autoRenew;
+    showToast(`自动续费已${autoRenew ? "开启" : "关闭"}`);
     await loadAccounts();
   } catch (err) {
+    account.auto_renew = previous;
     showToast(err.message || "更新失败", "error");
+    throw err;
+  }
+}
+
+async function toggleAccountEnabled(id, enabled) {
+  let account = accountsCache.find((item) => String(item.id) === String(id));
+  if (!account) {
+    const accounts = await apiFetch("/api/accounts");
+    accountsCache = Array.isArray(accounts) ? accounts : [];
+    account = accountsCache.find((item) => String(item.id) === String(id));
+  }
+  if (!account) {
+    showToast("账户不存在", "error");
+    return;
+  }
+  const previous = account.enabled !== false;
+  if (previous === enabled) return;
+  try {
+    await patchAccountField(id, { enabled });
+    account.enabled = enabled;
+    showToast(`账户已${enabled ? "启用" : "禁用"}`);
+    await loadAccounts();
+  } catch (err) {
+    account.enabled = previous;
+    showToast(err.message || "更新失败", "error");
+    throw err;
   }
 }
 
@@ -1826,7 +1911,7 @@ async function saveSettings() {
   }
 }
 
-accountsBody.addEventListener("click", async (event) => {
+accountsContainer.addEventListener("click", async (event) => {
   const action = event.target.getAttribute("data-action");
   const id = event.target.getAttribute("data-id");
   if (!action || !id) return;
@@ -1851,8 +1936,36 @@ accountsBody.addEventListener("click", async (event) => {
   if (action === "renew") {
     await runRenewForAccount(id);
   }
+});
+
+accountsContainer.addEventListener("change", async (event) => {
+  const action = event.target.getAttribute("data-action");
+  const id = event.target.getAttribute("data-id");
+  const target = event.target;
+  if (!action || !id) return;
+  if (target.disabled) return;
+  if (action === "toggle-enabled") {
+    const nextValue = target.checked;
+    target.disabled = true;
+    try {
+      await toggleAccountEnabled(id, nextValue);
+    } catch (err) {
+      target.checked = !nextValue;
+    } finally {
+      target.disabled = false;
+    }
+    return;
+  }
   if (action === "toggle-renew") {
-    await toggleAccountAutoRenew(id);
+    const nextValue = target.checked;
+    target.disabled = true;
+    try {
+      await toggleAccountAutoRenew(id, nextValue);
+    } catch (err) {
+      target.checked = !nextValue;
+    } finally {
+      target.disabled = false;
+    }
   }
 });
 
