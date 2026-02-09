@@ -105,10 +105,12 @@
               </div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-header">
+          </div>
+
+          <div class="accounts-section">
+            <div class="accounts-header">
               <h3>账户列表</h3>
-              <div class="card-actions">
+              <div class="accounts-header-actions">
                 <div class="toggle">
                   <span>全局自动续费</span>
                   <label class="switch">
@@ -119,24 +121,7 @@
                 <button id="refresh-accounts" class="ghost-btn">刷新</button>
               </div>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>名称</th>
-                    <th>启用</th>
-                    <th>状态</th>
-                    <th>最近签到</th>
-                    <th>当前积分</th>
-                    <th>白名单产品</th>
-                    <th>到期时间</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="accounts-body"></tbody>
-              </table>
-            </div>
-          </div>
+            <div id="accounts-container" class="account-cards"></div>
           </div>
 
           <div class="panel-body settings">

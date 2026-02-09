@@ -74,6 +74,44 @@ def update_account(
     return success_response(account.to_dict())
 
 
+@router.patch("/{account_id}")
+def patch_account(
+    account_id: str,
+    payload: dict = Body(default_factory=dict),
+    store: DataStore = Depends(get_store),
+) -> dict:
+    data = store.load()
+    account = next((item for item in data.accounts if item.id == account_id), None)
+    if not account:
+        raise ApiError("账户不存在", status_code=404)
+
+    if not isinstance(payload, dict):
+        raise ApiError("请求体格式错误", status_code=400)
+
+    allowed_fields = {"enabled", "auto_renew"}
+    provided_fields = set(payload.keys())
+    invalid_fields = provided_fields - allowed_fields
+    if invalid_fields:
+        raise ApiError(
+            f"仅支持更新字段: {', '.join(sorted(allowed_fields))}",
+            status_code=400,
+        )
+    if not provided_fields:
+        raise ApiError("至少提供一个可更新字段", status_code=400)
+
+    for field in sorted(provided_fields):
+        value = payload.get(field)
+        if not isinstance(value, bool):
+            raise ApiError(f"字段 {field} 必须为布尔值", status_code=400)
+        setattr(account, field, value)
+
+    try:
+        store.update_account(account)
+    except KeyError as exc:
+        raise ApiError("账户不存在", status_code=404) from exc
+    return success_response(account.to_dict())
+
+
 @router.delete("/{account_id}")
 def delete_account(account_id: str, store: DataStore = Depends(get_store)) -> dict:
     store.load()
